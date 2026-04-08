@@ -266,7 +266,7 @@ export default function CarsPage() {
 
   const { isAdmin, passwordDialogOpen, mounted } = useAdmin();
 
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
   const [editBrand, setEditBrand] = useState<Brand | null>(null);
   const [editSeries, setEditSeries] = useState<Series | null>(null);
@@ -449,21 +449,6 @@ export default function CarsPage() {
           {/* View mode toggle */}
           <div className="flex items-center rounded-xl border border-border/60 bg-card shadow-sm p-0.5 shrink-0">
             <motion.button
-              onClick={() => setViewMode("list")}
-              title="列表模式"
-              whileTap={{ scale: 0.88 }}
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              className={cn(
-                "flex items-center justify-center h-8 w-8 rounded-lg transition-all",
-                viewMode === "list"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-              )}
-              suppressHydrationWarning
-            >
-              <List className="h-4 w-4" />
-            </motion.button>
-            <motion.button
               onClick={() => setViewMode("grid")}
               title="卡片模式"
               whileTap={{ scale: 0.88 }}
@@ -477,6 +462,21 @@ export default function CarsPage() {
               suppressHydrationWarning
             >
               <Grid2x2 className="h-4 w-4" />
+            </motion.button>
+            <motion.button
+              onClick={() => setViewMode("list")}
+              title="列表模式"
+              whileTap={{ scale: 0.88 }}
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              className={cn(
+                "flex items-center justify-center h-8 w-8 rounded-lg transition-all",
+                viewMode === "list"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+              )}
+              suppressHydrationWarning
+            >
+              <List className="h-4 w-4" />
             </motion.button>
           </div>
           {/* Add button - always rendered, hidden with opacity */}

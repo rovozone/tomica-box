@@ -60,13 +60,28 @@ function SortableHeader({
   );
 }
 
-/** 取第一张可用图片 URL */
-function firstImage(car: Car): string | null {
-  if (car.image_urls?.length) return car.image_urls[0];
-  return car.image_url || null;
+/** 给 Supabase Storage URL 添加缩图参数，非 Supabase URL 原样返回
+ *  Supabase Image Transformation 需要把路径从
+ *  /storage/v1/object/public/  替换成  /storage/v1/render/image/public/
+ *  使用 resize=contain 保持原始宽高比，不裁切图片内容
+ */
+function withResize(url: string, width: number, quality = 80): string {
+  if (!url.includes("supabase.co/storage")) return url;
+  const transformed = url.replace(
+    "/storage/v1/object/public/",
+    "/storage/v1/render/image/public/"
+  );
+  const sep = transformed.includes("?") ? "&" : "?";
+  return `${transformed}${sep}width=${width}&quality=${quality}&resize=contain`;
 }
 
-/** 取所有图片 URL 列表 */
+/** 取第一张可用图片 URL（缩略图，用于列表/卡片展示） */
+function firstImage(car: Car, thumbWidth = 600): string | null {
+  const url = car.image_urls?.length ? car.image_urls[0] : (car.image_url || null);
+  return url ? withResize(url, thumbWidth) : null;
+}
+
+/** 取所有图片 URL 列表（原图，用于详情弹窗） */
 function allImages(car: Car): string[] {
   if (car.image_urls?.length) return car.image_urls;
   if (car.image_url) return [car.image_url];
@@ -76,11 +91,13 @@ function allImages(car: Car): string[] {
 const SPRING = { type: "spring", stiffness: 300, damping: 30 } as const;
 const VELOCITY_THRESHOLD = 500;
 
-/** 图片卡片：framer-motion drag + spring，支持触控板/触摸/鼠标 */
+/** 图片卡片：framer-motion drag + spring，支持触控板/触摸/鼠标
+ *  thumbImgs: 与 imgs 对应的缩略图 URL（可选），用于先行占位展示 */
 function ImageCard({
-  imgs, idx, onPrev, onNext, onDot, altText,
+  imgs, thumbImgs, idx, onPrev, onNext, onDot, altText,
 }: {
   imgs: string[];
+  thumbImgs?: string[];
   idx: number;
   onPrev: () => void;
   onNext: () => void;
@@ -89,10 +106,21 @@ function ImageCard({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
+  // 记录每张图是否已完成高清加载（key = 原图 URL）
+  const [loaded, setLoaded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     x.set(0);
   }, [idx, x]);
+
+  // 切换到新 idx 时，预先用 Image() 探测原图是否已缓存/加载完毕
+  useEffect(() => {
+    const src = imgs[idx];
+    if (!src || loaded[src]) return;
+    const img = new Image();
+    img.onload = () => setLoaded((prev) => ({ ...prev, [src]: true }));
+    img.src = src;
+  }, [idx, imgs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDragEnd = (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
     const W = containerRef.current?.offsetWidth ?? 502;
@@ -143,11 +171,25 @@ function ImageCard({
             whileDrag={{ cursor: "grabbing" }}
             onDragEnd={handleDragEnd}
           >
+            {/* 缩略图占位层：在原图未加载完成时显示 */}
+            {thumbImgs?.[idx] && !loaded[imgs[idx]] && (
+              <img
+                key={`thumb-${thumbImgs[idx]}`}
+                src={thumbImgs[idx]}
+                alt={altText}
+                className="absolute inset-0 w-full h-full object-cover"
+                draggable={false}
+              />
+            )}
+            {/* 原图层：加载完成后淡入覆盖缩略图 */}
             <img
+              key={imgs[idx]}
               src={imgs[idx]}
               alt={altText}
-              className="w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+              style={{ opacity: loaded[imgs[idx]] ? 1 : 0 }}
               draggable={false}
+              onLoad={() => setLoaded((prev) => ({ ...prev, [imgs[idx]]: true }))}
             />
           </motion.div>
         ) : (
@@ -312,7 +354,7 @@ export default function CarTable({ cars, showSeries = false, onRefresh, viewMode
               {cars.map((car) => (
                 <TableRow key={car.id} className="hover:bg-primary/[0.03] group align-middle border-b border-border/40 last:border-0 transition-colors">
                   <TableCell className="p-2.5">
-                    {firstImage(car) ? (
+                    {firstImage(car, 120) ? (
                       <motion.button
                         onClick={() => { setDetailCar(car); setSlideIndex(0); }}
                         className="block w-14 h-14 rounded-xl overflow-hidden border border-border/60 bg-muted/20 shrink-0 shadow-sm"
@@ -321,7 +363,7 @@ export default function CarTable({ cars, showSeries = false, onRefresh, viewMode
                         suppressHydrationWarning
                       >
                         <img
-                          src={firstImage(car)!}
+                          src={firstImage(car, 120)!}
                           alt={car.name || car.number || ""}
                           className="w-full h-full object-cover"
                         />
@@ -456,11 +498,13 @@ export default function CarTable({ cars, showSeries = false, onRefresh, viewMode
 
             <motion.div
               key="detail-modal"
-              className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+              className="fixed inset-0 z-50 flex items-center justify-center"
+              onClick={() => setDetailCar(null)}
               suppressHydrationWarning
             >
               <motion.div
                 className="relative pointer-events-auto"
+                onClick={(e) => e.stopPropagation()}
                 style={{ width: "min(760px, calc(100vw - 2rem))" }}
                 initial={{ opacity: 0, scale: 0.92, y: 14 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -586,10 +630,12 @@ export default function CarTable({ cars, showSeries = false, onRefresh, viewMode
 
                   {(() => {
                     const imgs = allImages(detailCar);
+                    const thumbImgs = imgs.map((url) => withResize(url, 600));
                     const clampedIdx = Math.min(slideIndex, Math.max(imgs.length - 1, 0));
                     return (
                       <ImageCard
                         imgs={imgs}
+                        thumbImgs={thumbImgs}
                         idx={clampedIdx}
                         onPrev={() => setSlideIndex((i) => (i - 1 + imgs.length) % imgs.length)}
                         onNext={() => setSlideIndex((i) => (i + 1) % imgs.length)}
