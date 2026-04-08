@@ -18,11 +18,11 @@ export default function CalculatorPage() {
         await Promise.all([
           supabase
             .from("cars")
-            .select("*, series(*)")
+            .select("*, series(*, brand:brands(*))")
             .order("name", { ascending: true }),
           supabase
             .from("series")
-            .select("*")
+            .select("*, brand:brands(*)")
             .order("name", { ascending: true }),
         ]);
 
@@ -44,7 +44,6 @@ export default function CalculatorPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">车轮限位计算器</h1>
         <p className="text-sm text-muted-foreground mt-1">

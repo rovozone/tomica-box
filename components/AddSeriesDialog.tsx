@@ -13,18 +13,30 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
+import { Brand } from "@/lib/types";
 import { Plus } from "lucide-react";
+import AddBrandDialog from "@/components/AddBrandDialog";
 
 interface AddSeriesDialogProps {
+  brands: Brand[];
   onSuccess: () => void;
+  onBrandAdded: () => void;
 }
 
-export default function AddSeriesDialog({ onSuccess }: AddSeriesDialogProps) {
+export default function AddSeriesDialog({ brands, onSuccess, onBrandAdded }: AddSeriesDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     name: "",
+    brand_id: "",
     box_length: "",
     box_width: "",
     box_height: "",
@@ -33,20 +45,19 @@ export default function AddSeriesDialog({ onSuccess }: AddSeriesDialogProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.box_length || !form.box_width || !form.box_height) {
-      return;
-    }
+    if (!form.name || !form.box_length || !form.box_width || !form.box_height) return;
     setLoading(true);
     try {
       const { error } = await supabase.from("series").insert({
         name: form.name,
+        brand_id: form.brand_id || null,
         box_length: parseFloat(form.box_length),
         box_width: parseFloat(form.box_width),
         box_height: parseFloat(form.box_height),
         notes: form.notes || null,
       });
       if (error) throw error;
-      setForm({ name: "", box_length: "", box_width: "", box_height: "", notes: "" });
+      setForm({ name: "", brand_id: "", box_length: "", box_width: "", box_height: "", notes: "" });
       setOpen(false);
       onSuccess();
     } catch (err) {
@@ -70,6 +81,38 @@ export default function AddSeriesDialog({ onSuccess }: AddSeriesDialogProps) {
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
+            {/* 品牌选择 */}
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between">
+                <Label>品牌</Label>
+                <AddBrandDialog
+                  onSuccess={onBrandAdded}
+                  trigger={
+                    <button type="button" className="text-xs text-primary hover:underline flex items-center gap-0.5">
+                      <Plus className="h-3 w-3" />新增品牌
+                    </button>
+                  }
+                />
+              </div>
+              <Select
+                value={form.brand_id}
+                onValueChange={(v) => setForm({ ...form, brand_id: v === "none" ? "" : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择品牌（可选）" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— 不指定品牌 —</SelectItem>
+                  {brands.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 系列名称 */}
             <div className="grid gap-2">
               <Label htmlFor="name">系列名称 *</Label>
               <Input
@@ -80,6 +123,8 @@ export default function AddSeriesDialog({ onSuccess }: AddSeriesDialogProps) {
                 required
               />
             </div>
+
+            {/* 盒子尺寸 */}
             <div className="grid grid-cols-3 gap-3">
               <div className="grid gap-2">
                 <Label htmlFor="box_length">盒长 (mm) *</Label>
@@ -118,6 +163,7 @@ export default function AddSeriesDialog({ onSuccess }: AddSeriesDialogProps) {
                 />
               </div>
             </div>
+
             <div className="grid gap-2">
               <Label htmlFor="notes">备注</Label>
               <Textarea

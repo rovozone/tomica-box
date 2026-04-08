@@ -58,7 +58,7 @@ export default function Calculator({ cars, seriesList }: CalculatorProps) {
 
   const isValid = wheelbase !== null && wheelWidth !== null && !isNaN(wheelbase) && !isNaN(wheelWidth);
 
-  // Group cars by series for display
+  // Group cars by series for display, with brand prefix
   const carsBySeries = seriesList
     .map((s) => ({
       series: s,
@@ -97,7 +97,7 @@ export default function Calculator({ cars, seriesList }: CalculatorProps) {
                   carsBySeries.map(({ series, cars: groupCars }) => (
                     <div key={series.id}>
                       <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50">
-                        {series.name}
+                        {series.brand ? `${series.brand.name} · ` : ""}{series.name}
                       </div>
                       {groupCars.map((car) => (
                         <SelectItem key={car.id} value={car.id}>

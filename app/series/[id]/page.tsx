@@ -9,12 +9,14 @@ import { supabase } from "@/lib/supabase";
 import { Series, Car } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, Box, Loader2, Ruler } from "lucide-react";
+import { ChevronLeft, Box, Loader2, Ruler, Tag } from "lucide-react";
+import { useAdmin } from "@/lib/admin-context";
 
 export default function SeriesDetailPage() {
   const params = useParams();
   const id = params.id as string;
 
+  const { isAdmin, mounted } = useAdmin();
   const [series, setSeries] = useState<Series | null>(null);
   const [cars, setCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,7 +26,7 @@ export default function SeriesDetailPage() {
     try {
       const [{ data: seriesData, error: se }, { data: carsData, error: ce }] =
         await Promise.all([
-          supabase.from("series").select("*").eq("id", id).single(),
+          supabase.from("series").select("*, brand:brands(*)").eq("id", id).single(),
           supabase
             .from("cars")
             .select("*")
@@ -62,9 +64,9 @@ export default function SeriesDetailPage() {
   if (!series) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Breadcrumb */}
-      <Button variant="ghost" size="sm" asChild className="-ml-2">
+      <Button variant="ghost" size="sm" asChild className="-ml-2 text-muted-foreground hover:text-foreground rounded-xl">
         <Link href="/series">
           <ChevronLeft className="h-4 w-4" />
           返回系列列表
@@ -72,57 +74,64 @@ export default function SeriesDetailPage() {
       </Button>
 
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary mt-0.5">
-            <Box className="h-6 w-6" />
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-primary/5 text-primary shadow-sm shrink-0">
+            <Box className="h-7 w-7" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">{series.name}</h1>
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <Badge variant="outline" className="font-mono text-xs gap-1">
-                <Ruler className="h-3 w-3" />
+            {series.brand && (
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Tag className="h-3.5 w-3.5 text-primary/70" />
+                <span className="text-sm font-medium text-primary/80">{series.brand.name}</span>
+              </div>
+            )}
+            <h1 className="text-3xl font-bold tracking-tight">{series.name}</h1>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 font-mono text-sm text-muted-foreground bg-muted/60 rounded-full px-3 py-0.5">
+                <Ruler className="h-3.5 w-3.5" />
                 {series.box_length} × {series.box_width} × {series.box_height} mm
-              </Badge>
-              <Badge variant="secondary" className="text-xs">
+              </span>
+              <span className="text-sm font-medium text-muted-foreground bg-muted/60 rounded-full px-3 py-0.5">
                 {cars.length} 款车型
-              </Badge>
+              </span>
             </div>
             {series.notes && (
-              <p className="text-sm text-muted-foreground mt-2">{series.notes}</p>
+              <p className="text-sm text-muted-foreground mt-2.5 leading-relaxed max-w-xl">{series.notes}</p>
             )}
           </div>
         </div>
-        <AddCarDialog
-          seriesList={[series]}
-          defaultSeriesId={series.id}
-          onSuccess={fetchData}
-        />
+        {mounted && isAdmin && (
+          <AddCarDialog
+            defaultSeriesId={series.id}
+            onSuccess={fetchData}
+          />
+        )}
       </div>
 
       {/* Box dimensions card */}
-      <div className="grid grid-cols-3 gap-4 rounded-xl border bg-muted/20 p-4">
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground">盒长</p>
-          <p className="text-xl font-bold font-mono">{series.box_length}</p>
-          <p className="text-xs text-muted-foreground">mm</p>
+      <div className="grid grid-cols-3 gap-0 rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
+        <div className="text-center py-6 px-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">盒长</p>
+          <p className="text-3xl font-bold font-mono text-foreground">{series.box_length}</p>
+          <p className="text-xs text-muted-foreground mt-1">mm</p>
         </div>
-        <div className="text-center border-x">
-          <p className="text-xs text-muted-foreground">盒宽</p>
-          <p className="text-xl font-bold font-mono">{series.box_width}</p>
-          <p className="text-xs text-muted-foreground">mm</p>
+        <div className="text-center py-6 px-4 border-x border-border/60">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">盒宽</p>
+          <p className="text-3xl font-bold font-mono text-foreground">{series.box_width}</p>
+          <p className="text-xs text-muted-foreground mt-1">mm</p>
         </div>
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground">盒高</p>
-          <p className="text-xl font-bold font-mono">{series.box_height}</p>
-          <p className="text-xs text-muted-foreground">mm</p>
+        <div className="text-center py-6 px-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">盒高</p>
+          <p className="text-3xl font-bold font-mono text-foreground">{series.box_height}</p>
+          <p className="text-xs text-muted-foreground mt-1">mm</p>
         </div>
       </div>
 
       {/* Cars table */}
       <div>
-        <h2 className="text-base font-semibold mb-3">车型列表</h2>
-        <CarTable cars={cars} />
+        <h2 className="text-lg font-semibold tracking-tight mb-4">车型列表</h2>
+        <CarTable cars={cars} onRefresh={fetchData} />
       </div>
     </div>
   );
