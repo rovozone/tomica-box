@@ -60,11 +60,23 @@
 @layer base {
   * {
     @apply border-border;
+    /* 消除移动端点击高亮蓝框 */
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-feature-settings: 'tnum' on, 'lnum' on;
     -webkit-font-smoothing: antialiased;
+    /* 全局防止页面级橡皮筋回弹（iOS Safari），滚动由各容器自行管理 */
+    overscroll-behavior: none;
+  }
+  /* 可滚动容器：启用 iOS 惯性滚动 */
+  [data-scroll], .overflow-y-auto, .overflow-x-auto, .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  /* 通用可点击元素：手势优化，防止 300ms 延迟 */
+  button, a, [role="button"] {
+    touch-action: manipulation;
   }
 }

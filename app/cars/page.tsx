@@ -206,15 +206,16 @@ function FilterPill({
   return (
     <motion.button
       onClick={onClick}
-      whileTap={{ scale: 0.96 }}
+      whileTap={{ scale: 0.94 }}
       transition={{ type: "spring", stiffness: 500, damping: 35 }}
       className={cn(
-        "flex items-center gap-1.5 rounded-lg transition-colors shrink-0",
-        small ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm",
+        "flex items-center gap-1.5 rounded-lg transition-colors shrink-0 select-none",
+        small ? "px-2.5 py-1 text-xs min-h-[28px]" : "px-3 py-1.5 text-sm min-h-[36px]",
         active
           ? "bg-primary text-primary-foreground font-medium"
           : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
       )}
+      style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
       suppressHydrationWarning
     >
       {icon}
@@ -454,11 +455,12 @@ export default function CarsPage() {
               whileTap={{ scale: 0.88 }}
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
               className={cn(
-                "flex items-center justify-center h-8 w-8 rounded-lg transition-all",
+                "flex items-center justify-center h-9 w-9 rounded-lg transition-all",
                 viewMode === "grid"
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
               )}
+              style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
               suppressHydrationWarning
             >
               <Grid2x2 className="h-4 w-4" />
@@ -469,11 +471,12 @@ export default function CarsPage() {
               whileTap={{ scale: 0.88 }}
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
               className={cn(
-                "flex items-center justify-center h-8 w-8 rounded-lg transition-all",
+                "flex items-center justify-center h-9 w-9 rounded-lg transition-all",
                 viewMode === "list"
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
               )}
+              style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
               suppressHydrationWarning
             >
               <List className="h-4 w-4" />

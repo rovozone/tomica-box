@@ -227,6 +227,106 @@ function ImageCard({
   );
 }
 
+/** 移动端图片轮播组件：全尺寸填充，支持左右滑动切换 */
+function MobileImageSlider({
+  imgs, thumbImgs, idx, onPrev, onNext, onDot, altText,
+}: {
+  imgs: string[];
+  thumbImgs?: string[];
+  idx: number;
+  onPrev: () => void;
+  onNext: () => void;
+  onDot: (i: number) => void;
+  altText: string;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
+  const [loaded, setLoaded] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    animate(x, 0, { duration: 0 });
+  }, [idx, x]);
+
+  useEffect(() => {
+    const src = imgs[idx];
+    if (!src || loaded[src]) return;
+    const img = new Image();
+    img.onload = () => setLoaded((prev) => ({ ...prev, [src]: true }));
+    img.src = src;
+  }, [idx, imgs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDragEnd = (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
+    const W = containerRef.current?.offsetWidth ?? 300;
+    const { offset, velocity } = info;
+    const goNext = offset.x < -(W * 0.25) || velocity.x < -VELOCITY_THRESHOLD;
+    const goPrev = offset.x > (W * 0.25) || velocity.x > VELOCITY_THRESHOLD;
+
+    if (goNext && idx < imgs.length - 1) {
+      animate(x, -W, { ...SPRING, onComplete: () => { onNext(); } });
+    } else if (goPrev && idx > 0) {
+      animate(x, W, { ...SPRING, onComplete: () => { onPrev(); } });
+    } else {
+      animate(x, 0, SPRING);
+    }
+  };
+
+  return (
+    <div ref={containerRef} className="w-full h-full relative overflow-hidden select-none bg-muted/10">
+      {imgs.length > 0 ? (
+        <motion.div
+          className="w-full h-full"
+          drag={imgs.length > 1 ? "x" : false}
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.18}
+          style={{ x, cursor: imgs.length > 1 ? "grab" : "default", willChange: "transform" }}
+          whileDrag={{ cursor: "grabbing" }}
+          onDragEnd={handleDragEnd}
+        >
+          {/* 缩略图占位层 */}
+          {thumbImgs?.[idx] && !loaded[imgs[idx]] && (
+            <img
+              key={`thumb-${thumbImgs[idx]}`}
+              src={thumbImgs[idx]}
+              alt={altText}
+              className="absolute inset-0 w-full h-full object-cover"
+              draggable={false}
+            />
+          )}
+          {/* 原图层：加载完成后淡入 */}
+          <img
+            key={imgs[idx]}
+            src={imgs[idx]}
+            alt={altText}
+            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+            style={{ opacity: loaded[imgs[idx]] ? 1 : 0 }}
+            draggable={false}
+            onLoad={() => setLoaded((prev) => ({ ...prev, [imgs[idx]]: true }))}
+          />
+        </motion.div>
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-muted/20 text-muted-foreground/20">
+          <ImageOff className="h-10 w-10" />
+        </div>
+      )}
+
+      {imgs.length > 1 && (
+        <>
+          <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-10 pointer-events-none">
+            {imgs.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => onDot(i)}
+                className={`w-1.5 h-1.5 rounded-full transition-all pointer-events-auto ${i === idx ? "bg-white scale-125" : "bg-white/50 hover:bg-white/75"}`}
+                aria-label={`第${i + 1}张`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 interface CarTableProps {
   cars: Car[];
   showSeries?: boolean;
@@ -267,8 +367,8 @@ export default function CarTable({ cars, showSeries = false, onRefresh, viewMode
     <>
       {/* ── GRID VIEW ── */}
       {viewMode === "grid" && (
-        <motion.div
-          className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+      <motion.div
+        className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 touch-pan-y"
           initial="hidden"
           animate="visible"
           variants={{
@@ -287,7 +387,8 @@ export default function CarTable({ cars, showSeries = false, onRefresh, viewMode
                 visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 28 } },
               }}
               whileHover={{ y: -4, boxShadow: "0 8px 24px -4px hsl(var(--primary)/0.12), 0 2px 8px -2px hsl(var(--primary)/0.08)", transition: { type: "spring", stiffness: 400, damping: 25 } }}
-              whileTap={{ scale: 0.97, transition: { type: "spring", stiffness: 500, damping: 30 } }}
+              whileTap={{ scale: 0.95, transition: { type: "spring", stiffness: 500, damping: 30 } }}
+              style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
               suppressHydrationWarning
             >
               <div className="aspect-square bg-muted/30 overflow-hidden relative flex-shrink-0">
@@ -439,23 +540,25 @@ export default function CarTable({ cars, showSeries = false, onRefresh, viewMode
                       "flex items-center gap-1 transition-opacity justify-end",
                       (!mounted || !isAdmin) ? "opacity-0 pointer-events-none" : "opacity-0 group-hover:opacity-100"
                     )}>
+                      {/* 删除（次要·左）编辑（主要·右） */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground/60 hover:text-destructive hover:bg-destructive/8"
+                        onClick={() => setDeleteTarget(car)}
+                        title="删除车型"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                       <AddCarDialog
                         editCar={car}
                         onSuccess={onRefresh}
                         trigger={
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-primary/10 hover:text-primary" title="编辑车型">
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                         }
                       />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(car)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -467,17 +570,39 @@ export default function CarTable({ cars, showSeries = false, onRefresh, viewMode
 
       {/* ── DELETE CONFIRM ── */}
       <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <DialogContent className="sm:max-w-[360px]">
-          <DialogTitle className="text-base font-semibold pb-1">确认删除</DialogTitle>
-          <p className="text-sm text-muted-foreground py-2">
-            确定要删除 <span className="font-semibold text-foreground">「{deleteTarget?.name || deleteTarget?.number}」</span> 吗？此操作不可撤销。
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>取消</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+        <DialogContent className="sm:max-w-[360px] p-0 overflow-hidden gap-0">
+          {/* 危险操作警示区 */}
+          <div className="flex flex-col items-center gap-3 px-6 pt-7 pb-5 bg-destructive/5 border-b border-destructive/10">
+            <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-destructive/10">
+              <Trash2 className="h-6 w-6 text-destructive" />
+            </div>
+            <div className="text-center">
+              <DialogTitle className="text-base font-semibold text-foreground">删除车型</DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                即将删除
+                <span className="font-semibold text-foreground mx-1">「{deleteTarget?.name || deleteTarget?.number}」</span>
+                此操作<span className="text-destructive font-medium">无法撤销</span>。
+              </p>
+            </div>
+          </div>
+          {/* 操作区：取消（次要·左）确认删除（主要·右） */}
+          <div className="flex gap-2 px-5 py-4">
+            <Button
+              variant="outline"
+              className="flex-1 h-10"
+              onClick={() => setDeleteTarget(null)}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-[2] h-10 font-semibold"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
               {deleting ? "删除中..." : "确认删除"}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -496,9 +621,165 @@ export default function CarTable({ cars, showSeries = false, onRefresh, viewMode
               suppressHydrationWarning
             />
 
+            {/* ── 移动端：底部 Sheet 样式（上图下文）── */}
+            {/* 移动端蒙层点击关闭（独立覆盖在 backdrop 上） */}
+            <div
+              className="sm:hidden fixed inset-0 z-[49]"
+              onClick={() => setDetailCar(null)}
+            />
+
+            <motion.div
+              key="detail-modal-mobile"
+              className="sm:hidden fixed inset-x-0 bottom-0 z-50 flex flex-col pointer-events-none"
+              suppressHydrationWarning
+            >
+              <motion.div
+                className="pointer-events-auto bg-card rounded-t-3xl shadow-2xl flex flex-col overflow-hidden"
+                style={{ maxHeight: "92dvh" }}
+                onClick={(e) => e.stopPropagation()}
+                drag="y"
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.35 }}
+                dragMomentum={false}
+                onDragEnd={(_: unknown, info: { offset: { y: number }; velocity: { y: number } }) => {
+                  if (info.offset.y > 72 || info.velocity.y > 350) setDetailCar(null);
+                }}
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", stiffness: 380, damping: 34 }}
+                suppressHydrationWarning
+              >
+                {/* 顶部栏：纯拖拽指示条 */}
+                <div className="flex items-center justify-center pt-3 pb-2 shrink-0">
+                  <div className="w-9 h-1 rounded-full bg-border/60" />
+                </div>
+
+                {/* 图片区域 */}
+                {(() => {
+                  const imgs = allImages(detailCar);
+                  const thumbImgs = imgs.map((url) => withResize(url, 600));
+                  const clampedIdx = Math.min(slideIndex, Math.max(imgs.length - 1, 0));
+                  return (
+                    <div className="relative mx-4 mt-2 mb-3 rounded-2xl overflow-hidden shrink-0" style={{ aspectRatio: "4/3" }}>
+                      <MobileImageSlider
+                        imgs={imgs}
+                        thumbImgs={thumbImgs}
+                        idx={clampedIdx}
+                        onPrev={() => setSlideIndex((i) => (i - 1 + imgs.length) % imgs.length)}
+                        onNext={() => setSlideIndex((i) => (i + 1) % imgs.length)}
+                        onDot={(i) => setSlideIndex(i)}
+                        altText={detailCar.name || detailCar.number || ""}
+                      />
+                    </div>
+                  );
+                })()}
+
+                {/* 信息区域（可滚动） */}
+                <div className="flex-1 overflow-y-auto overscroll-contain px-5 space-y-4 min-h-0 pb-4">
+                  {/* 标题行：全宽展示，无右侧挤压 */}
+                  <div>
+                    <h2 className="text-xl font-bold leading-snug tracking-tight">
+                      {detailCar.name || <span className="text-muted-foreground/60 font-normal">未命名车型</span>}
+                    </h2>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {detailCar.series && (
+                        <span className="text-xs text-muted-foreground">
+                          {detailCar.series.brand ? `${detailCar.series.brand.name} · ` : ""}{detailCar.series.name}
+                        </span>
+                      )}
+                      {detailCar.number && (
+                        <span className="font-mono text-[11px] text-muted-foreground/60 bg-muted/60 rounded px-1.5 py-0.5 tracking-wider">
+                          {detailCar.number}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 分隔线 */}
+                  <div className="border-t border-border/40" />
+
+                  {/* 属性行 */}
+                  {detailCar.wheelbase != null && (
+                    <div className="flex items-baseline gap-2">
+                      <Ruler className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0 translate-y-[1px]" />
+                      <span className="text-xs text-muted-foreground/70 shrink-0">轮距</span>
+                      <span className="font-mono font-semibold tabular-nums text-sm">
+                        {detailCar.wheelbase}
+                        <span className="font-normal text-muted-foreground text-xs ml-0.5">mm</span>
+                      </span>
+                    </div>
+                  )}
+
+                  {detailCar.tags && detailCar.tags.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Tag className="h-3 w-3 text-muted-foreground/60" />
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">标签</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {detailCar.tags.map((tag) => (
+                          <span key={tag} className="text-xs font-normal rounded-full px-3 py-1 bg-primary/8 text-primary/75 border border-primary/12">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {detailCar.notes && (
+                    <div className="flex items-start gap-2">
+                      <StickyNote className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0 mt-0.5" />
+                      <span className="text-xs text-muted-foreground/70 shrink-0 mt-0.5">备注</span>
+                      <span className="text-sm text-muted-foreground leading-relaxed">{detailCar.notes}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 底部操作区：仅 Admin 可见 */}
+                {/* 删除（次要·左·小）编辑（主要·右·大） */}
+                {mounted && isAdmin && (
+                  <div className="shrink-0 px-4 pt-3 pb-6 border-t border-border/40 flex items-center gap-2">
+                    {/* 删除：幽灵轮廓，宽度收窄，视觉降权 */}
+                    <motion.button
+                      onClick={() => { setDetailCar(null); setDeleteTarget(detailCar); }}
+                      className="flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl border border-border/60 bg-transparent text-muted-foreground text-sm"
+                      whileTap={{ scale: 0.96 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                      style={{ touchAction: "manipulation" }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      删除
+                    </motion.button>
+                    {/* 编辑：实心主色，flex-1 撑满剩余，视觉强化 */}
+                    <AddCarDialog
+                      editCar={detailCar}
+                      onSuccess={() => { onRefresh(); setDetailCar(null); }}
+                      trigger={
+                        <motion.button
+                          className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold shadow-sm"
+                          whileTap={{ scale: 0.97 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                          style={{ touchAction: "manipulation" }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          编辑车型
+                        </motion.button>
+                      }
+                    />
+                  </div>
+                )}
+                {/* 非 Admin 时底部留白，适配 iOS 安全区 */}
+                {(!mounted || !isAdmin) && (
+                  <div className="shrink-0 pb-6" />
+                )}
+              </motion.div>
+            </motion.div>
+
+            {/* ── 桌面端：双卡片斜置样式（保持原有逻辑）── */}
             <motion.div
               key="detail-modal"
-              className="fixed inset-0 z-50 flex items-center justify-center"
+              className="hidden sm:flex fixed inset-0 z-50 items-center justify-center"
               onClick={() => setDetailCar(null)}
               suppressHydrationWarning
             >
@@ -600,14 +881,25 @@ export default function CarTable({ cars, showSeries = false, onRefresh, viewMode
                       "absolute bottom-3 right-3 flex items-center gap-1.5 transition-opacity",
                       (!mounted || !isAdmin) ? "opacity-0 pointer-events-none" : ""
                     )}>
+                      {/* 删除（次要·左）编辑（主要·右） */}
+                      <motion.button
+                        onClick={() => { setDetailCar(null); setDeleteTarget(detailCar); }}
+                        className="flex items-center justify-center w-7 h-7 rounded-lg bg-muted/40 text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        title="删除车型"
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.9 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </motion.button>
                       <AddCarDialog
                         editCar={detailCar}
                         onSuccess={() => { onRefresh(); setDetailCar(null); }}
                         trigger={
                           <motion.button
-                            className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted/60 text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
+                            className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/90 text-primary-foreground hover:bg-primary transition-colors shadow-sm"
                             title="编辑车型"
-                            whileHover={{ scale: 1.1 }}
+                            whileHover={{ scale: 1.08 }}
                             whileTap={{ scale: 0.9 }}
                             transition={{ type: "spring", stiffness: 400, damping: 25 }}
                           >
@@ -615,16 +907,6 @@ export default function CarTable({ cars, showSeries = false, onRefresh, viewMode
                           </motion.button>
                         }
                       />
-                      <motion.button
-                        onClick={() => { setDetailCar(null); setDeleteTarget(detailCar); }}
-                        className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted/60 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                        title="删除车型"
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </motion.button>
                     </div>
                   </motion.div>
 
